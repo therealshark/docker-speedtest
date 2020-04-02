@@ -1,4 +1,4 @@
-FROM debian:10-slim AS build-stage
+FROM debian:10-slim AS get-speedtest
 
 RUN apt-get update && apt-get install gnupg1 apt-transport-https dirmngr lsb-release -y
 RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 379CE192D401AB61
@@ -6,7 +6,14 @@ RUN echo "deb https://ookla.bintray.com/debian $(lsb_release -sc) main" | tee  /
 RUN apt-get update
 RUN apt-get install speedtest
 
-FROM node:12-alpine AS prod-stage
+FROM alpine as install-dependencies
+RUN apk add --no-cache npm
+WORKDIR /build
+COPY contents .
+RUN npm ci
+
+FROM alpine as prod-stage
+RUN apk add --no-cache nodejs
 LABEL maintainer="Jonas Friedmann <j@frd.mn>"
 
 WORKDIR /usr/src/app
@@ -16,8 +23,7 @@ ENV INFLUXDB_DB="speedtest" \
     SPEEDTEST_HOST="local" \
     SPEEDTEST_INTERVAL=3600
 
-COPY --from=build-stage /usr/bin/speedtest /usr/bin/speedtest
-COPY contents .
-RUN npm ci
-
 CMD [ "node", "index.js" ]
+
+COPY --from=get-speedtest /usr/bin/speedtest /usr/bin/speedtest
+COPY --from=install-dependencies /build .
